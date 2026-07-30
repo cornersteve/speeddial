@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<title>Speed Dial</title>
+<meta name="apple-mobile-web-app-title" content="Dial">
+<link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+<title>Dial</title>
 <style>
   :root { --bg:#111; --fg:#fff; --key:#2a2a2a; --keyactive:#3d3d3d; --accent:#8a8a8a; --muted:#8a8a8a; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; user-select:none; }
@@ -58,7 +60,7 @@
 
   <div class="setup" id="setup">
     <h2>Contacts</h2>
-    <p>One per line: number,name,phone<br>Example: 55,John Smith,+15551234567<br><br>Copy list here, then paste and Save in the Text and Call apps to sync all three.</p>
+    <p>One per line: number,name,phone<br>Example: 55,John Smith,+15551234567<br><br>Copy list here, then paste and Save in the other two apps to sync all three.</p>
     <textarea id="data" spellcheck="false" autocapitalize="off"></textarea>
     <div class="msg" id="msg"></div>
     <div class="row">
@@ -69,9 +71,8 @@
       <button class="cancel" onclick="closeSetup()">Close</button>
     </div>
   </div>
-
 <script>
-  const mode = new URLSearchParams(location.search).get('mode'); // 'text' | 'call' | null
+  const mode = null;
   const auto = (mode === 'text' || mode === 'call');
   let contacts = {};
   let entry = "";
@@ -81,17 +82,10 @@
 
   (function setupMode(){
     const root=document.documentElement.style;
-    let title='Speed Dial', icon='#', color='#8a8a8a';
-    if(mode==='text'){ title='Speed Text'; icon='T'; color='#2e7d32'; }
-    if(mode==='call'){ title='Speed Call'; icon='C'; color='#1565c0'; }
+    let color='#8a8a8a';
+    if(mode==='text'){ color='#2e7d32'; document.getElementById('modeLabel').textContent='Speed Text'; }
+    else if(mode==='call'){ color='#1565c0'; document.getElementById('modeLabel').textContent='Speed Call'; }
     root.setProperty('--accent', color);
-    document.getElementById('modeLabel').textContent = title;
-    document.title = title;
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><rect width='180' height='180' rx='38' fill='#111'/><text x='90' y='128' font-size='110' font-family='-apple-system,sans-serif' font-weight='700' fill='${color}' text-anchor='middle'>${icon}</text></svg>`;
-    const link=document.createElement('link'); link.rel='apple-touch-icon';
-    link.href='data:image/svg+xml;base64,'+btoa(svg); document.head.appendChild(link);
-    const m=document.createElement('meta'); m.name='apple-mobile-web-app-title'; m.content=title;
-    document.head.appendChild(m);
     if(auto) document.getElementById('actions').classList.add('hidden');
   })();
 
@@ -145,10 +139,9 @@
       b.onclick=()=>press(k); pad.appendChild(b);
     });
   }
-
   function listText(){
     return Object.keys(contacts).sort((a,b)=>a-b)
-      .map(n=>`${n},${contacts[n].name},${contacts[n].phone}`).join('\n');
+      .map(n=>n+','+contacts[n].name+','+contacts[n].phone).join('\n');
   }
   function openSetup(){
     document.getElementById('data').value=listText();
@@ -163,16 +156,10 @@
     document.getElementById('msg').textContent='Saved '+Object.keys(contacts).length+' contacts.';
   }
   async function copyList(){
-    const ta=document.getElementById('data');
-    const txt=ta.value;
+    const ta=document.getElementById('data'); const txt=ta.value;
     const msg=document.getElementById('msg');
-    try{
-      await navigator.clipboard.writeText(txt);
-      msg.textContent='Copied. Paste into the Text and Call apps.';
-    }catch(e){
-      ta.focus(); ta.select();
-      msg.textContent='Tap Copy on the selected text.';
-    }
+    try{ await navigator.clipboard.writeText(txt); msg.textContent='Copied. Paste into the other two apps.'; }
+    catch(e){ ta.focus(); ta.select(); msg.textContent='Tap Copy on the selected text.'; }
   }
 
   load(); buildPad(); render();

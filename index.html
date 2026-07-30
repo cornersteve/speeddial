@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Speed Dial</title>
+<style>
+  :root { --bg:#111; --fg:#fff; --key:#2a2a2a; --keyactive:#3d3d3d; --accent:#8a8a8a; --muted:#8a8a8a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; user-select:none; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:-apple-system,system-ui,sans-serif; overscroll-behavior:none; }
+  body { display:flex; flex-direction:column; padding:env(safe-area-inset-top) 8px env(safe-area-inset-bottom); }
+  .top { display:flex; align-items:center; justify-content:space-between; padding:6px 6px 0; }
+  .top span { color:var(--accent); font-size:15px; font-weight:600; }
+  .gear { background:none; border:none; color:var(--muted); font-size:22px; padding:6px 8px; }
+  .display { text-align:center; padding:8px 4px 2px; }
+  .num { font-size:46px; font-weight:600; min-height:54px; letter-spacing:3px; }
+  .name { font-size:19px; color:var(--muted); min-height:24px; margin-top:2px; }
+  .name.found { color:var(--fg); }
+  .pad { flex:1; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 4px; min-height:0; }
+  .key { background:var(--key); border:none; color:var(--fg); font-size:30px; font-weight:500; border-radius:16px; }
+  .key:active { background:var(--keyactive); }
+  .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:2px 4px 8px; }
+  .actions.hidden { display:none; }
+  .act { border:none; color:#fff; font-size:22px; font-weight:600; padding:20px 0; border-radius:16px; opacity:.3; transition:opacity .12s; }
+  .act.on { opacity:1; }
+  .act.on:active { filter:brightness(.85); }
+  .text { background:#2e7d32; }
+  .call { background:#1565c0; }
+  .setup { position:fixed; inset:0; background:var(--bg); padding:18px; display:none; flex-direction:column; }
+  .setup.show { display:flex; }
+  .setup h2 { margin:0 0 4px; font-size:20px; }
+  .setup p { color:var(--muted); font-size:13px; margin:0 0 10px; line-height:1.45; }
+  textarea { flex:1; width:100%; background:#1c1c1c; color:#fff; border:1px solid #333; border-radius:12px; padding:12px; font-size:15px; font-family:ui-monospace,monospace; user-select:text; }
+  .msg { color:var(--muted); font-size:13px; min-height:18px; margin-top:8px; text-align:center; }
+  .row { display:flex; gap:10px; margin-top:10px; }
+  .row button { flex:1; padding:15px; border:none; border-radius:12px; font-size:16px; font-weight:600; }
+  .copy { background:#444; color:#fff; }
+  .save { background:#2e7d32; color:#fff; }
+  .cancel { background:#333; color:#fff; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <span id="modeLabel">Speed Dial</span>
+    <button class="gear" id="gear" onclick="openSetup()">&#9881;</button>
+  </div>
+  <div class="display">
+    <div class="num" id="num">&nbsp;</div>
+    <div class="name" id="name">Enter a number</div>
+  </div>
+  <div class="pad" id="pad"></div>
+  <div class="actions" id="actions">
+    <button class="act text" id="textBtn" onclick="doText()">Text</button>
+    <button class="act call" id="callBtn" onclick="doCall()">Call</button>
+  </div>
+
+  <div class="setup" id="setup">
+    <h2>Contacts</h2>
+    <p>One per line: number,name,phone<br>Example: 55,John Smith,+15551234567<br><br>Copy list here, then paste and Save in the Text and Call apps to sync all three.</p>
+    <textarea id="data" spellcheck="false" autocapitalize="off"></textarea>
+    <div class="msg" id="msg"></div>
+    <div class="row">
+      <button class="copy" onclick="copyList()">Copy list</button>
+      <button class="save" onclick="saveData()">Save</button>
+    </div>
+    <div class="row">
+      <button class="cancel" onclick="closeSetup()">Close</button>
+    </div>
+  </div>
+
+<script>
+  const mode = new URLSearchParams(location.search).get('mode'); // 'text' | 'call' | null
+  const auto = (mode === 'text' || mode === 'call');
+  let contacts = {};
+  let entry = "";
+
+  function norm(x){ x=(x||"").toString().trim().replace(/^0+/,""); return x===""?"0":x; }
+  function cur(){ return contacts[norm(entry)]; }
+
+  (function setupMode(){
+    const root=document.documentElement.style;
+    let title='Speed Dial', icon='#', color='#8a8a8a';
+    if(mode==='text'){ title='Speed Text'; icon='T'; color='#2e7d32'; }
+    if(mode==='call'){ title='Speed Call'; icon='C'; color='#1565c0'; }
+    root.setProperty('--accent', color);
+    document.getElementById('modeLabel').textContent = title;
+    document.title = title;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><rect width='180' height='180' rx='38' fill='#111'/><text x='90' y='128' font-size='110' font-family='-apple-system,sans-serif' font-weight='700' fill='${color}' text-anchor='middle'>${icon}</text></svg>`;
+    const link=document.createElement('link'); link.rel='apple-touch-icon';
+    link.href='data:image/svg+xml;base64,'+btoa(svg); document.head.appendChild(link);
+    const m=document.createElement('meta'); m.name='apple-mobile-web-app-title'; m.content=title;
+    document.head.appendChild(m);
+    if(auto) document.getElementById('actions').classList.add('hidden');
+  })();
+
+  function load(){
+    try { contacts = JSON.parse(localStorage.getItem('sd_contacts')||'{}'); } catch(e){ contacts={}; }
+  }
+  function parse(txt){
+    const map={};
+    txt.split('\n').forEach(line=>{
+      const p=line.split(',');
+      if(p.length>=3){
+        const n=norm(p[0]);
+        const name=p[1].trim();
+        const phone=p.slice(2).join(',').trim().replace(/[^\d+]/g,'');
+        if(name && phone) map[n]={name,phone};
+      }
+    });
+    return map;
+  }
+  function render(){
+    document.getElementById('num').textContent = entry || '\u00A0';
+    const c = cur();
+    const nameEl = document.getElementById('name');
+    if(c){ nameEl.textContent=c.name; nameEl.classList.add('found'); }
+    else { nameEl.textContent = entry ? 'No contact' : (auto?'Type 2 digits':'Enter a number'); nameEl.classList.remove('found'); }
+    if(!auto){
+      document.getElementById('textBtn').classList.toggle('on', !!c);
+      document.getElementById('callBtn').classList.toggle('on', !!c);
+    }
+  }
+  function fire(){
+    const c = cur();
+    if(c){ location.href = (mode==='call'?'tel:':'sms:') + c.phone; }
+    else { render(); setTimeout(()=>{ entry=''; render(); }, 700); }
+  }
+  function press(k){
+    if(k==='del') entry=entry.slice(0,-1);
+    else if(k==='clr') entry='';
+    else if(entry.length<2) entry+=k;
+    render();
+    if(auto && entry.length===2) fire();
+  }
+  function doText(){ const c=cur(); if(c) location.href='sms:'+c.phone; }
+  function doCall(){ const c=cur(); if(c) location.href='tel:'+c.phone; }
+
+  function buildPad(){
+    const pad=document.getElementById('pad');
+    ['1','2','3','4','5','6','7','8','9','clr','0','del'].forEach(k=>{
+      const b=document.createElement('button'); b.className='key';
+      b.textContent = k==='del'?'\u232B' : k==='clr'?'C' : k;
+      b.onclick=()=>press(k); pad.appendChild(b);
+    });
+  }
+
+  function listText(){
+    return Object.keys(contacts).sort((a,b)=>a-b)
+      .map(n=>`${n},${contacts[n].name},${contacts[n].phone}`).join('\n');
+  }
+  function openSetup(){
+    document.getElementById('data').value=listText();
+    document.getElementById('msg').textContent='';
+    document.getElementById('setup').classList.add('show');
+  }
+  function closeSetup(){ document.getElementById('setup').classList.remove('show'); }
+  function saveData(){
+    contacts=parse(document.getElementById('data').value);
+    localStorage.setItem('sd_contacts', JSON.stringify(contacts));
+    entry=''; render();
+    document.getElementById('msg').textContent='Saved '+Object.keys(contacts).length+' contacts.';
+  }
+  async function copyList(){
+    const ta=document.getElementById('data');
+    const txt=ta.value;
+    const msg=document.getElementById('msg');
+    try{
+      await navigator.clipboard.writeText(txt);
+      msg.textContent='Copied. Paste into the Text and Call apps.';
+    }catch(e){
+      ta.focus(); ta.select();
+      msg.textContent='Tap Copy on the selected text.';
+    }
+  }
+
+  load(); buildPad(); render();
+  if(Object.keys(contacts).length===0) openSetup();
+</script>
+</body>
+</html>

@@ -134,8 +134,13 @@
     else if(entry.length<11) entry+=k;
     render();
   }
-  function doText(){ const t=target(); if(t) location.href='sms:'+t.phone; }
-  function doCall(){ const t=target(); if(t) location.href='tel:'+t.phone; }
+  function act(scheme){
+    const t=target(); if(!t) return;
+    location.href=scheme+t.phone;
+    entry=''; render();   // clear so it's blank when he returns
+  }
+  function doText(){ act('sms:'); }
+  function doCall(){ act('tel:'); }
 
   function buildPad(){
     const pad=document.getElementById('pad');
